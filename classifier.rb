@@ -80,9 +80,24 @@ end
 
 class Trainer
 
-  def load_data
-    images=File.read("train-images-idx3-ubyte")#.force_encoding("us-ascii")
-    labels=File.binread("train-labels-idx1-ubyte")#.force_encoding("us-ascii")
+  def initialize
+    load_raw_files
+    @nn_map        = Array.new(10)
+    @nn_map_normal = Array.new(10)
+    @nn_map_visual = Array.new(10)
+
+    10.times do |i|
+      @nn_map[i] = [0] * @pixels
+      @nn_map_normal[i] = [0] * @pixels
+      @nn_map_visual[i] = ' ' * @pixels
+    end
+
+  end
+
+  def load_raw_files
+    puts "Loading raw files."
+    images=File.binread("train-images-idx3-ubyte")
+    labels=File.binread("train-labels-idx1-ubyte")
 
     magic = labels[0..4]
     puts "Label Magic is = " + magic.b2s
@@ -100,44 +115,44 @@ class Trainer
     @labels_bytes=labels.bytes[8..-1]
     @images_bytes=images.bytes[16..-1]
     @pixels=@rows * @cols # number of pixels of a picture
-
   end
 
-  def save_data
-
+  def save_nn_map
+    File.open('nn_map.data', 'w') {|f| f.write(Marshal.dump(@nn_map)) }
   end
 
-  def setup_nn
-    @nn_map = Array.new(10)
-    10.times{|i| @nn_map[i] = [0] * @pixels}
-
-    @nn_map_normal= Array.new(10)
-    10.times{|i| @nn_map_normal[i] = [0] * @pixels}
-
-    @nn_map_visual= Array.new(10)
-    10.times{|i| @nn_map_visual[i] = ' ' * @pixels}
+  def load_nn_map
+    begin
+      @nn_map=Marshal.load(File.read('nn_map.data'))
+    rescue
+      return nil
+    end
+    @nn_map
   end
-
-  def feed_1 figure, pos, val
-    @nn_map[figure][pos] += val
-  end
-
 
   def train_1
+    if !load_nn_map.nil?
+      puts "Loaded data from save data file."
+      return
+    end
+
+    puts "Parsing data from raw files."
     @total_num_data.times do |i|
       pm = Pixmap.new(@cols, @rows)
       @rows.times do |r|
         @cols.times do |c|
           color = @images_bytes[i * @pixels + c + r * @cols]
-          feed_1 @labels_bytes[i], c + r * @rows , color
+          @nn_map[@labels_bytes[i]][c + r * @rows] += color
         end
       end
-      puts "#{i} done." if i % 1000 == 0
+      puts "#{i} done." if i % 5000 == 0
     end
+
+    save_nn_map
   end
 
   def normalize_1
-    puts "normalizing..."
+    puts "Normalizing values..."
     @nn_map.size.times do |fig|
       @pixels.times do |i|
         @nn_map_normal[fig][i]=@nn_map[fig][i] / 256.0 / @total_num_data.to_f
@@ -149,10 +164,10 @@ class Trainer
   def visualize_nn_map
     @nn_map.size.times do |fig|
       @pixels.times do |i|
-        if @nn_map_normal[fig][i] > 0.07
+        if @nn_map_normal[fig][i] > 0.06
           @nn_map_visual[fig][i] = "*"
-        elsif @nn_map_normal[fig][i] > 0.035
-          @nn_map_visual[fig][i] = "-"
+        elsif @nn_map_normal[fig][i] > 0.030
+          @nn_map_visual[fig][i] = "+"
         elsif @nn_map_normal[fig][i] > 0.015
           @nn_map_visual[fig][i] = "."
         end
@@ -167,8 +182,6 @@ class Trainer
 end
 
 t=Trainer.new
-t.load_data
-t.setup_nn
 t.train_1
 t.normalize_1
 t.visualize_nn_map
