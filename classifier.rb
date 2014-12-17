@@ -77,6 +77,17 @@ class String
   end
 end
 
+class Array
+  def normalize
+    xMin,xMax = self.minmax
+    map {|x| x/ xMax }
+  end
+
+  def prob_array
+    sum = inject(:+)
+    map {|x| x/sum}
+  end
+end
 
 class Trainer
 
@@ -179,9 +190,28 @@ class Trainer
     end
   end
 
+  #accepts a new 2d graph (but encoded in 1d ruby array), values from 0-255
+  #returns a probability array.
+  def test_new_figure fig
+    prob_arr=[0.0] * 10
+
+    10.times do |i|
+      fig.size.times do |j|
+        abs_match_ratio = 1.0 - (@nn_map_normal[i][j] - fig[j]/256.0).abs
+        prob_arr[i] += abs_match_ratio
+      end
+    end
+    puts prob_arr.prob_array
+    puts " "
+    puts "Most likely = #{prob_arr.each_with_index.max[1]}"
+    prob_arr
+  end
+
 end
 
 t=Trainer.new
 t.train_1
 t.normalize_1
 t.visualize_nn_map
+
+t.test_new_figure [2] * 256
