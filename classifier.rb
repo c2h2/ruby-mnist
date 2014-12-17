@@ -192,7 +192,7 @@ class Trainer
 
   #accepts a new 2d graph (but encoded in 1d ruby array), values from 0-255
   #returns a probability array.
-  def test_new_figure fig
+  def test_new_figure fig, verbose_print=false
     prob_arr=[0.0] * 10
 
     10.times do |i|
@@ -201,17 +201,82 @@ class Trainer
         prob_arr[i] += abs_match_ratio
       end
     end
-    puts prob_arr.prob_array
-    puts " "
-    puts "Most likely = #{prob_arr.each_with_index.max[1]}"
-    prob_arr
+    if verbose_print
+      puts prob_arr.prob_array
+      puts " "
+      puts "Most likely = #{prob_arr.each_with_index.max[1]}"
+    end
+    prob_arr.each_with_index.max[1]
   end
 
+end
+
+
+class Tester
+
+  def initialize
+    load_raw_files
+    @nn_map        = Array.new(10)
+  end
+
+  def load_raw_files
+    puts "Loading raw test files."
+    images=File.binread("t10k-images-idx3-ubyte")
+    labels=File.binread("t10k-labels-idx1-ubyte")
+
+    magic = labels[0..4]
+    puts "Label Magic is = " + magic.b2s
+    magic2 = images[0..4]
+    puts "Image Magic is = " + magic2.b2s
+    @total_num_data = labels[4..8].b2i
+    puts "Total Labels = " + @total_num_data.to_s
+    @num2 = images[4..8].b2i
+    puts "Total Images = " + @num2.to_s
+    @rows = images[8..12].b2i
+    puts "Total Rows = " + @rows.to_s
+    @cols = images[12..16].b2i
+    puts "Total Cols = " + @cols.to_s
+
+    @labels_bytes=labels.bytes[8..-1]
+    @images_bytes=images.bytes[16..-1]
+    @pixels=@rows * @cols #number of pixels of a picture
+  end
+
+  def test_each_pic trainer_obj
+    puts "Parsing data from raw files."
+    correct=0
+    wrong =0
+    @total_num_data.times do |i|
+
+      figure=Array.new(@pixels)
+      actual_figure = @labels_bytes[i]
+      @rows.times do |r|
+        @cols.times do |c|
+          figure[c + r * @cols] = @images_bytes[i * @pixels + c + r * @cols]
+
+        end
+      end
+      guess = trainer_obj.test_new_figure figure
+      #puts "ACTUAL IS #{actual_figure}, guess is #{guess}"
+
+      if guess == actual_figure
+        correct +=1
+      else
+        wrong +=1
+      end
+
+
+    end
+    puts "correct rate is #{correct/(correct+wrong).to_f}"
+  end
 end
 
 t=Trainer.new
 t.train_1
 t.normalize_1
 t.visualize_nn_map
+
+t2= Tester.new
+t2.test_each_pic t
 
 t.test_new_figure [2] * 256
